@@ -10,7 +10,6 @@
 
 #include <GraphicsUtil.hpp>
 #include <WindowUtil.hpp>
-#include <fstream>
 #include <type_traits>
 
 TEST_CASE("[Graphics] sf::Font", runDisplayTests())
@@ -146,7 +145,21 @@ TEST_CASE("[Graphics] sf::Font", runDisplayTests())
 
         SECTION("Successful load")
         {
-            REQUIRE(font.openFromFile("Graphics/tuffy.ttf"));
+            SECTION("From ASCII filename")
+            {
+                REQUIRE(font.openFromFile("Graphics/tuffy.ttf"));
+            }
+
+            SECTION("From Polish filename")
+            {
+                REQUIRE(font.openFromFile("Graphics/tuffy-ń.ttf"));
+            }
+
+            SECTION("From emoji filename")
+            {
+                REQUIRE(font.openFromFile("Graphics/tuffy-🐌.ttf"));
+            }
+
             CHECK(font.getInfo().family == "Tuffy");
             const auto& glyph = font.getGlyph(0x45, 16, false);
             CHECK(glyph.advance == 9);
