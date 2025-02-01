@@ -164,7 +164,16 @@ TEST_CASE("[Audio] sf::InputSoundFile")
         {
             SECTION("flac")
             {
-                REQUIRE(inputSoundFile.openFromFile("Audio/ding.flac"));
+                SECTION("ASCII filename")
+                {
+                    REQUIRE(inputSoundFile.openFromFile("Audio/ding.flac"));
+                }
+
+                SECTION("Unicode filename")
+                {
+                    REQUIRE(inputSoundFile.openFromFile(U"Audio/ding-\u0144.flac"));
+                }
+
                 CHECK(inputSoundFile.getSampleCount() == 87'798);
                 CHECK(inputSoundFile.getChannelCount() == 1);
                 CHECK(inputSoundFile.getSampleRate() == 44'100);
@@ -175,7 +184,16 @@ TEST_CASE("[Audio] sf::InputSoundFile")
 
             SECTION("mp3")
             {
-                REQUIRE(inputSoundFile.openFromFile("Audio/ding.mp3"));
+                SECTION("ASCII filename")
+                {
+                    REQUIRE(inputSoundFile.openFromFile("Audio/ding.mp3"));
+                }
+
+                SECTION("Unicode filename")
+                {
+                    REQUIRE(inputSoundFile.openFromFile(U"Audio/ding-\U0001F40C.mp3"));
+                }
+
                 CHECK(inputSoundFile.getSampleCount() == 87'798);
                 CHECK(inputSoundFile.getChannelCount() == 1);
                 CHECK(inputSoundFile.getSampleRate() == 44'100);
