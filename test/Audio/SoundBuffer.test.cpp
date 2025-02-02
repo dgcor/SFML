@@ -192,12 +192,24 @@ TEST_CASE("[Audio] sf::SoundBuffer", runAudioDeviceTests())
 
     SECTION("saveToFile()")
     {
-        const auto filename = std::filesystem::temp_directory_path() / "ding.flac";
+        auto filename = std::filesystem::temp_directory_path();
 
+        SECTION("ASCII filename")
         {
-            const sf::SoundBuffer soundBuffer("Audio/ding.flac");
-            REQUIRE(soundBuffer.saveToFile(filename));
+            filename /= "ding.flac";
         }
+
+        SECTION("Polish filename")
+        {
+            filename /= U"ding-\u0144.flac";
+        }
+
+        SECTION("Emoji filename")
+        {
+            filename /= U"ding-\U0001F40C.flac";
+        }
+
+        REQUIRE(sf::SoundBuffer("Audio/ding.flac").saveToFile(filename));
 
         const sf::SoundBuffer soundBuffer(filename);
         CHECK(soundBuffer.getSamples() != nullptr);
