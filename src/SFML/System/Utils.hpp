@@ -33,6 +33,7 @@
 #include <string>
 
 #include <cstddef>
+#include <cstdio>
 
 
 namespace sf
@@ -51,4 +52,6 @@ template <typename IntegerType, typename... Bytes>
     std::size_t index   = 0;
     return ((integer |= static_cast<IntegerType>(static_cast<IntegerType>(byte) << 8 * index++)), ...);
 }
+
+[[nodiscard]] std::FILE* openFile(const std::filesystem::path& filename, const char* mode);
 } // namespace sf

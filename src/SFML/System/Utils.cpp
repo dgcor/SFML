@@ -31,6 +31,13 @@
 
 #include <cctype>
 
+#ifdef SFML_SYSTEM_WINDOWS
+#include <vector>
+
+#include <cstdlib>
+#include <cstring>
+#endif
+
 
 namespace sf
 {
@@ -49,6 +56,17 @@ std::string formatDebugPathInfo(const std::filesystem::path& path)
     oss << "    Provided path: " << reinterpret_cast<const char*>(path.u8string().c_str()) << '\n' //
         << "    Absolute path: " << reinterpret_cast<const char*>(std::filesystem::absolute(path).u8string().c_str());
     return oss.str();
+}
+
+std::FILE* openFile(const std::filesystem::path& filename, const char* mode)
+{
+#ifdef SFML_SYSTEM_WINDOWS
+    std::vector<wchar_t> wmode(std::strlen(mode) + 1);
+    std::mbstowcs(wmode.data(), mode, wmode.size());
+    return _wfopen(filename.c_str(), wmode.data());
+#else
+    return std::fopen(filename.c_str(), mode);
+#endif
 }
 
 } // namespace sf
