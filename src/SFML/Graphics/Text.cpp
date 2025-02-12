@@ -79,12 +79,14 @@ Text::Text() :
 m_string             (),
 m_font               (NULL),
 m_characterSize      (30),
+m_sizeX              (0.f),
 m_letterSpacingFactor(1.f),
 m_lineSpacingFactor  (1.f),
 m_style              (Regular),
 m_fillColor          (255, 255, 255),
 m_outlineColor       (0, 0, 0),
 m_outlineThickness   (0),
+m_lineCount          (0),
 m_vertices           (Triangles),
 m_outlineVertices    (Triangles),
 m_bounds             (),
@@ -100,12 +102,14 @@ Text::Text(const String& string, const Font& font, unsigned int characterSize) :
 m_string             (string),
 m_font               (&font),
 m_characterSize      (characterSize),
+m_sizeX              (0.f),
 m_letterSpacingFactor(1.f),
 m_lineSpacingFactor  (1.f),
 m_style              (Regular),
 m_fillColor          (255, 255, 255),
 m_outlineColor       (0, 0, 0),
 m_outlineThickness   (0),
+m_lineCount          (0),
 m_vertices           (Triangles),
 m_outlineVertices    (Triangles),
 m_bounds             (),
@@ -307,6 +311,13 @@ float Text::getOutlineThickness() const
 
 
 ////////////////////////////////////////////////////////////
+Uint32 Text::getLineCount() const
+{
+    return m_lineCount;
+}
+
+
+////////////////////////////////////////////////////////////
 Vector2f Text::findCharacterPos(std::size_t index) const
 {
     // Make sure that we have a valid font
@@ -388,6 +399,202 @@ void Text::draw(RenderTarget& target, RenderStates states) const
     }
 }
 
+////////////////////////////////////////////////////////////
+float Text::calculateLineLength(const Uint32* text) const
+{
+    if (text[0] == 0 || text[0] == L'\n')
+    {
+        return 0.f;
+    }
+
+    // Compute values related to the text style
+    bool  isBold = m_style & Bold;
+    float italicShear = (m_style & Italic) ? 0.209f : 0.f; // 12 degrees in radians
+
+    // Precompute the variables needed by the algorithm
+    float whitespaceWidth = m_font->getGlyph(L' ', m_characterSize, isBold).advance;
+    float letterSpacing = (whitespaceWidth / 3.f) * (m_letterSpacingFactor - 1.f);
+    whitespaceWidth += letterSpacing;
+    float x = 0.f;
+
+    // Create one quad for each character
+    float minX = static_cast<float>(m_characterSize);
+    float maxX = 0.f;
+    Uint32 prevChar = 0;
+    for (std::size_t i = 0; ; ++i)
+    {
+        Uint32 curChar = text[i];
+
+        if (curChar == 0 || curChar == '\n')
+        {
+            break;
+        }
+
+        // Skip the \r char to avoid weird graphical issues
+        if (curChar == '\r')
+        {
+            continue;
+        }
+
+        // Apply the kerning offset
+        x += m_font->getKerning(prevChar, curChar, m_characterSize);
+
+        prevChar = curChar;
+
+        // Handle special characters
+        if ((curChar == L' ') || (curChar == L'\t'))
+        {
+            // Update the current bounds (min coordinates)
+            minX = std::min(minX, x);
+
+            switch (curChar)
+            {
+            case L' ':  x += whitespaceWidth;     break;
+            case L'\t': x += whitespaceWidth * 4; break;
+            }
+
+            // Update the current bounds (max coordinates)
+            maxX = std::max(maxX, x);
+
+            // Next glyph, no need to create a quad for whitespace
+            continue;
+        }
+
+        // Apply the outline
+        if (m_outlineThickness != 0)
+        {
+            const Glyph& glyph = m_font->getGlyph(curChar, m_characterSize, isBold, m_outlineThickness);
+
+            float left = glyph.bounds.left;
+            float top = glyph.bounds.top;
+            float right = glyph.bounds.left + glyph.bounds.width;
+            float bottom = glyph.bounds.top + glyph.bounds.height;
+
+            // Update the current bounds with the outlined glyph bounds
+            minX = std::min(minX, x + left - italicShear * bottom - m_outlineThickness);
+            maxX = std::max(maxX, x + right - italicShear * top - m_outlineThickness);
+        }
+
+        // Extract the current glyph's description
+        const Glyph& glyph = m_font->getGlyph(curChar, m_characterSize, isBold);
+
+        // Update the current bounds with the non outlined glyph bounds
+        if (m_outlineThickness == 0)
+        {
+            float left = glyph.bounds.left;
+            float top = glyph.bounds.top;
+            float right = glyph.bounds.left + glyph.bounds.width;
+            float bottom = glyph.bounds.top + glyph.bounds.height;
+
+            minX = std::min(minX, x + left - italicShear * bottom);
+            maxX = std::max(maxX, x + right - italicShear * top);
+        }
+
+        // Advance to the next character
+        x += glyph.advance + letterSpacing;
+    }
+
+    return maxX - minX;
+}
+
+////////////////////////////////////////////////////////////
+void Text::calculateSize() const
+{
+    // Compute values related to the text style
+    bool  isBold = m_style & Bold;
+    float italicShear = (m_style & Italic) ? 0.209f : 0.f; // 12 degrees in radians
+
+    // Precompute the variables needed by the algorithm
+    float whitespaceWidth = m_font->getGlyph(L' ', m_characterSize, isBold).advance;
+    float letterSpacing = (whitespaceWidth / 3.f) * (m_letterSpacingFactor - 1.f);
+    whitespaceWidth += letterSpacing;
+    float lineSpacing = m_font->getLineSpacing(m_characterSize) * m_lineSpacingFactor;
+    float x = 0.f;
+    float y = static_cast<float>(m_characterSize);
+
+    // Create one quad for each character
+    float minX = static_cast<float>(m_characterSize);
+    float minY = static_cast<float>(m_characterSize);
+    float maxX = 0.f;
+    float maxY = 0.f;
+    Uint32 prevChar = 0;
+    for (std::size_t i = 0; i < m_string.getSize(); ++i)
+    {
+        Uint32 curChar = m_string[i];
+
+        // Skip the \r char to avoid weird graphical issues
+        if (curChar == '\r')
+        {
+            continue;
+        }
+
+        // Apply the kerning offset
+        x += m_font->getKerning(prevChar, curChar, m_characterSize);
+
+        prevChar = curChar;
+
+        // Handle special characters
+        if ((curChar == L' ') || (curChar == L'\n') || (curChar == L'\t'))
+        {
+            // Update the current bounds (min coordinates)
+            minX = std::min(minX, x);
+            minY = std::min(minY, y);
+
+            switch (curChar)
+            {
+            case L' ':  x += whitespaceWidth;     break;
+            case L'\t': x += whitespaceWidth * 4; break;
+            case L'\n': y += lineSpacing; x = 0;  break;
+            }
+
+            // Update the current bounds (max coordinates)
+            maxX = std::max(maxX, x);
+            maxY = std::max(maxY, y);
+
+            // Next glyph, no need to create a quad for whitespace
+            continue;
+        }
+
+        // Apply the outline
+        if (m_outlineThickness != 0)
+        {
+            const Glyph& glyph = m_font->getGlyph(curChar, m_characterSize, isBold, m_outlineThickness);
+
+            float left = glyph.bounds.left;
+            float top = glyph.bounds.top;
+            float right = glyph.bounds.left + glyph.bounds.width;
+            float bottom = glyph.bounds.top + glyph.bounds.height;
+
+            // Update the current bounds with the outlined glyph bounds
+            minX = std::min(minX, x + left - italicShear * bottom - m_outlineThickness);
+            maxX = std::max(maxX, x + right - italicShear * top - m_outlineThickness);
+            minY = std::min(minY, y + top - m_outlineThickness);
+            maxY = std::max(maxY, y + bottom - m_outlineThickness);
+        }
+
+        // Extract the current glyph's description
+        const Glyph& glyph = m_font->getGlyph(curChar, m_characterSize, isBold);
+
+        // Update the current bounds with the non outlined glyph bounds
+        if (m_outlineThickness == 0)
+        {
+            float left = glyph.bounds.left;
+            float top = glyph.bounds.top;
+            float right = glyph.bounds.left + glyph.bounds.width;
+            float bottom = glyph.bounds.top + glyph.bounds.height;
+
+            minX = std::min(minX, x + left - italicShear * bottom);
+            maxX = std::max(maxX, x + right - italicShear * top);
+            minY = std::min(minY, y + top);
+            maxY = std::max(maxY, y + bottom);
+        }
+
+        // Advance to the next character
+        x += glyph.advance + letterSpacing;
+    }
+
+    m_sizeX = maxX - minX;
+}
 
 ////////////////////////////////////////////////////////////
 void Text::ensureGeometryUpdate() const
@@ -412,12 +619,21 @@ void Text::ensureGeometryUpdate() const
 
     // No text: nothing to draw
     if (m_string.isEmpty())
+    {
+        m_lineCount = 0;
         return;
+    }
+
+    // calculate maximum line size
+    calculateSize();
+    m_lineCount = 1;
 
     // Compute values related to the text style
     bool  isBold             = m_style & Bold;
     bool  isUnderlined       = m_style & Underlined;
     bool  isStrikeThrough    = m_style & StrikeThrough;
+    bool  isHorizAlignCenter = m_style & HorizontalAlignCenter;
+    bool  isHorizAlignRight  = m_style & HorizontalAlignRight;
     float italicShear        = (m_style & Italic) ? 0.209f : 0.f; // 12 degrees in radians
     float underlineOffset    = m_font->getUnderlinePosition(m_characterSize);
     float underlineThickness = m_font->getUnderlineThickness(m_characterSize);
@@ -435,6 +651,15 @@ void Text::ensureGeometryUpdate() const
     float lineSpacing     = m_font->getLineSpacing(m_characterSize) * m_lineSpacingFactor;
     float x               = 0.f;
     float y               = static_cast<float>(m_characterSize);
+
+    if (isHorizAlignCenter == true)
+    {
+        x += std::round((m_sizeX / 2.f) - (calculateLineLength(m_string.getData()) / 2.f));
+    }
+    else if (isHorizAlignRight == true)
+    {
+        x += (m_sizeX - calculateLineLength(m_string.getData()));
+    }
 
     // Create one quad for each character
     float minX = static_cast<float>(m_characterSize);
@@ -484,7 +709,21 @@ void Text::ensureGeometryUpdate() const
             {
                 case L' ':  x += whitespaceWidth;     break;
                 case L'\t': x += whitespaceWidth * 4; break;
-                case L'\n': y += lineSpacing; x = 0;  break;
+                case L'\n':
+                {
+                    m_lineCount++;
+                    y += lineSpacing;
+                    x = 0;
+                    if (isHorizAlignCenter == true)
+                    {
+                        x += std::round((m_sizeX / 2.f) - (calculateLineLength(m_string.getData() + i + 1) / 2.f));
+                    }
+                    else if (isHorizAlignRight == true)
+                    {
+                        x += (m_sizeX - calculateLineLength(m_string.getData() + i + 1));
+                    }
+                    break;
+                }
             }
 
             // Update the current bounds (max coordinates)
