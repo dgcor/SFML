@@ -62,11 +62,13 @@ public:
     ////////////////////////////////////////////////////////////
     enum Style
     {
-        Regular       = 0,      //!< Regular characters, no style
-        Bold          = 1 << 0, //!< Bold characters
-        Italic        = 1 << 1, //!< Italic characters
-        Underlined    = 1 << 2, //!< Underlined characters
-        StrikeThrough = 1 << 3  //!< Strike through characters
+        Regular               = 0,      //!< Regular characters, no style
+        Bold                  = 1 << 0, //!< Bold characters
+        Italic                = 1 << 1, //!< Italic characters
+        Underlined            = 1 << 2, //!< Underlined characters
+        StrikeThrough         = 1 << 3, //!< Strike through characters
+        HorizontalAlignCenter = 1 << 4, //!< CenterAlign text
+        HorizontalAlignRight  = 1 << 5  //!< RightAlign text
     };
 
     ////////////////////////////////////////////////////////////
@@ -243,6 +245,8 @@ public:
     ////////////////////////////////////////////////////////////
     void setOutlineThickness(float thickness);
 
+    [[nodiscard]] std::uint32_t getLineCount() const;
+
     ////////////////////////////////////////////////////////////
     /// \brief Get the text's string
     ///
@@ -400,6 +404,9 @@ private:
     ////////////////////////////////////////////////////////////
     void draw(RenderTarget& target, RenderStates states) const override;
 
+    float calculateLineLength(const std::uint32_t* text) const;
+    void calculateSize() const;
+
     ////////////////////////////////////////////////////////////
     /// \brief Make sure the text's geometry is updated
     ///
@@ -415,12 +422,14 @@ private:
     String                m_string;                                    //!< String to display
     const Font*           m_font{};                                    //!< Font used to display the string
     unsigned int          m_characterSize{30};                         //!< Base size of characters, in pixels
+    mutable float         m_sizeX{0.f};                                //!< Line size
     float                 m_letterSpacingFactor{1.f};                  //!< Spacing factor between letters
     float                 m_lineSpacingFactor{1.f};                    //!< Spacing factor between lines
     std::uint32_t         m_style{Regular};                            //!< Text style (see Style enum)
     Color                 m_fillColor{Color::White};                   //!< Text fill color
     Color                 m_outlineColor{Color::Black};                //!< Text outline color
     float                 m_outlineThickness{0.f};                     //!< Thickness of the text's outline
+    mutable std::uint32_t m_lineCount{0};                              //!< Line count
     mutable VertexArray   m_vertices{PrimitiveType::Triangles};        //!< Vertex array containing the fill geometry
     mutable VertexArray   m_outlineVertices{PrimitiveType::Triangles}; //!< Vertex array containing the outline geometry
     mutable FloatRect     m_bounds;               //!< Bounding rectangle of the text (in local coordinates)
